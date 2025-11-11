@@ -1,0 +1,106 @@
+<!doctype html>
+<html>
+<head>
+	<meta charset="utf-8">
+	<title>Spring WebSocket Chat</title>
+	<script src="https://cdn.jsdelivr.net/npm/sockjs-client@1/dist/sockjs.min.js"></script>
+	<script src="https://cdn.jsdelivr.net/npm/stompjs@2.3.3/lib/stomp.min.js"></script>
+	<style>
+		body {
+			font-family: Arial, sans-serif;
+			margin: 20px;
+		}
+		#messages {
+			border: 1px solid #ccc;
+			padding: 10px;
+			height: 300px;
+			overflow-y: auto;
+			background: #fafafa;
+		}
+		#msgForm {
+			margin-top: 10px;
+		}
+		input, button {
+			padding: 6px;
+			font-size: 14px;
+		}
+	</style>
+</head>
+<body>
+	<h2>Spring WebSocket Chat</h2>
+
+	<div>
+		<label>Your name: <input id="name" value="User" /></label>
+		<button id="connectBtn">Connect</button>
+		<button id="disconnectBtn" disabled>Disconnect</button>
+	</div>
+
+	<div id="messages"></div>
+
+	<form id="msgForm" onsubmit="sendMessage(event)">
+		<input id="message" autocomplete="off" placeholder="Type a message" style="width:70%" disabled />
+		<button id="sendBtn" disabled>Send</button>
+	</form>
+
+	<script>
+		let stompClient = null;
+
+		function setConnected(connected) {
+			document.getElementById('connectBtn').disabled = connected;
+			document.getElementById('disconnectBtn').disabled = !connected;
+			document.getElementById('message').disabled = !connected;
+			document.getElementById('sendBtn').disabled = !connected;
+
+			if (!connected) {
+				document.getElementById('messages').innerHTML = "";
+			}
+		}
+
+		document.getElementById('connectBtn').addEventListener('click', function () {
+			const socket = new SockJS('/ws'); // backend endpoint
+			stompClient = Stomp.over(socket);
+			stompClient.connect({}, function (frame) {
+				setConnected(true);
+				console.log('Connected: ' + frame);
+				stompClient.subscribe('/topic/greetings', function (message) {
+					const body = JSON.parse(message.body);
+					showMessage(body.from + ': ' + body.text);
+				});
+			});
+		});
+
+		document.getElementById('disconnectBtn').addEventListener('click', function () {
+			if (stompClient) {
+				stompClient.disconnect();
+				setConnected(false);
+				console.log('Disconnected');
+			}
+		});
+
+		function sendMessage(event) {
+			event.preventDefault();
+			const from = document.getElementById('name').value;
+			const text = document.getElementById('message').value;
+			if (!stompClient || !stompClient.connected) {
+				alert('Not connected');
+				return;
+			}
+			const payload = {
+				from: from,
+				text: text,
+				time: new Date().toISOString()
+			};
+			stompClient.send('/app/hello', {}, JSON.stringify(payload));
+			document.getElementById('message').value = '';
+		}
+
+		function showMessage(msg) {
+			const div = document.getElementById('messages');
+			const p = document.createElement('p');
+			p.textContent = msg;
+			div.appendChild(p);
+			div.scrollTop = div.scrollHeight;
+		}
+	</script>
+</body>
+</html>
