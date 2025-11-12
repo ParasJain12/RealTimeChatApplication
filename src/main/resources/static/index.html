@@ -1,96 +1,116 @@
 <!doctype html>
 <html>
+
 <head>
 	<meta charset="utf-8">
-	<title>Spring WebSocket Chat</title>
+	<title>Secure Chat with JWT + WebSocket</title>
 	<script src="https://cdn.jsdelivr.net/npm/sockjs-client@1/dist/sockjs.min.js"></script>
 	<script src="https://cdn.jsdelivr.net/npm/stompjs@2.3.3/lib/stomp.min.js"></script>
+	<link rel="icon" href="data:,">
 	<style>
 		body {
 			font-family: Arial, sans-serif;
 			margin: 20px;
 		}
+
 		#messages {
 			border: 1px solid #ccc;
 			padding: 10px;
 			height: 300px;
-			overflow-y: auto;
+			overflow: auto;
 			background: #fafafa;
 		}
-		#msgForm {
-			margin-top: 10px;
-		}
-		input, button {
-			padding: 6px;
-			font-size: 14px;
+
+		input,
+		button {
+			padding: 5px;
+			margin: 5px;
 		}
 	</style>
 </head>
-<body>
-	<h2>Spring WebSocket Chat</h2>
 
-	<div>
-		<label>Your name: <input id="name" value="User" /></label>
-		<button id="connectBtn">Connect</button>
-		<button id="disconnectBtn" disabled>Disconnect</button>
+<body>
+	<h2>Spring Boot Secure Chat (JWT + WebSocket)</h2>
+
+	<div id="loginDiv">
+		<h3>Login</h3>
+		Username: <input id="username" />
+		Password: <input id="password" type="password" />
+		<button onclick="login()">Login</button>
 	</div>
 
-	<div id="messages"></div>
-
-	<form id="msgForm" onsubmit="sendMessage(event)">
-		<input id="message" autocomplete="off" placeholder="Type a message" style="width:70%" disabled />
-		<button id="sendBtn" disabled>Send</button>
-	</form>
+	<div id="chatDiv" style="display:none;">
+		<p>Welcome, <span id="userLabel"></span>!</p>
+		<button id="connectBtn">Connect</button>
+		<button id="disconnectBtn" disabled>Disconnect</button>
+		<div id="messages"></div>
+		<form id="msgForm" onsubmit="sendMessage(event)">
+			<input id="message" autocomplete="off" placeholder="Type a message" style="width:70%">
+			<button id="sendBtn" disabled>Send</button>
+		</form>
+	</div>
 
 	<script>
 		let stompClient = null;
+		let token = null;
 
-		function setConnected(connected) {
-			document.getElementById('connectBtn').disabled = connected;
-			document.getElementById('disconnectBtn').disabled = !connected;
-			document.getElementById('message').disabled = !connected;
-			document.getElementById('sendBtn').disabled = !connected;
+		async function login() {
+			const username = document.getElementById("username").value;
+			const password = document.getElementById("password").value;
 
-			if (!connected) {
-				document.getElementById('messages').innerHTML = "";
-			}
+			const res = await fetch("http://localhost:8088/api/auth/login", {
+				method: "POST",
+				headers: {"Content-Type": "application/json"},
+				body: JSON.stringify({username, password})
+			});
+
+			if (!res.ok) {alert("Login failed!"); return;}
+			const data = await res.json();
+			token = data.token;
+			document.getElementById("loginDiv").style.display = "none";
+			document.getElementById("chatDiv").style.display = "block";
+			document.getElementById("userLabel").textContent = username;
+			alert("Login successful! Now connect to chat.");
 		}
 
 		document.getElementById('connectBtn').addEventListener('click', function () {
-			const socket = new SockJS('/ws'); // backend endpoint
+			const socket = new SockJS('/ws');
 			stompClient = Stomp.over(socket);
-			stompClient.connect({}, function (frame) {
-				setConnected(true);
-				console.log('Connected: ' + frame);
-				stompClient.subscribe('/topic/greetings', function (message) {
-					const body = JSON.parse(message.body);
-					showMessage(body.from + ': ' + body.text);
-				});
-			});
+			stompClient.connect(
+				{Authorization: "Bearer " + token}, // attach token here 👈
+				function (frame) {
+					console.log('Connected: ' + frame);
+					document.getElementById('connectBtn').disabled = true;
+					document.getElementById('disconnectBtn').disabled = false;
+					document.getElementById('sendBtn').disabled = false;
+					stompClient.subscribe('/topic/greetings', function (message) {
+						const body = JSON.parse(message.body);
+						showMessage(body.from + ": " + body.text);
+					});
+				},
+				function (error) {
+					alert("Connection error (maybe invalid token): " + error);
+				}
+			);
 		});
 
 		document.getElementById('disconnectBtn').addEventListener('click', function () {
 			if (stompClient) {
 				stompClient.disconnect();
-				setConnected(false);
 				console.log('Disconnected');
+				document.getElementById('connectBtn').disabled = false;
+				document.getElementById('disconnectBtn').disabled = true;
+				document.getElementById('sendBtn').disabled = true;
 			}
 		});
 
 		function sendMessage(event) {
 			event.preventDefault();
-			const from = document.getElementById('name').value;
 			const text = document.getElementById('message').value;
-			if (!stompClient || !stompClient.connected) {
-				alert('Not connected');
-				return;
-			}
-			const payload = {
-				from: from,
+			stompClient.send('/app/hello', {}, JSON.stringify({
 				text: text,
 				time: new Date().toISOString()
-			};
-			stompClient.send('/app/hello', {}, JSON.stringify(payload));
+			}));
 			document.getElementById('message').value = '';
 		}
 
@@ -103,4 +123,5 @@
 		}
 	</script>
 </body>
+
 </html>

@@ -17,7 +17,7 @@ import com.realtime.chat.utility.JwtUtil;
 
 @RestController
 @RequestMapping("/api/auth")
-@CrossOrigin("*")
+@CrossOrigin(origins = "http://localhost:8088")
 public class AuthController {
 	
 	private final AuthenticationManager authManager;
