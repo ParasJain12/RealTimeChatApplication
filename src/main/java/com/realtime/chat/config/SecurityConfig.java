@@ -21,51 +21,69 @@ import com.realtime.chat.security.JwtFilter;
 @Configuration
 public class SecurityConfig {
 
-	private final JwtFilter jwtFilter;
+    private final JwtFilter jwtFilter;
 
-	public SecurityConfig(JwtFilter jwtFilter) {
-		this.jwtFilter = jwtFilter;
-	}
+    public SecurityConfig(JwtFilter jwtFilter) {
+        this.jwtFilter = jwtFilter;
+    }
 
-	@Bean
-	public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
-		http.csrf(csrf -> csrf.disable()).cors(cors -> cors.configurationSource(request -> {
-			var corsConfig = new org.springframework.web.cors.CorsConfiguration();
-			corsConfig.setAllowedOrigins(java.util.List.of("http://localhost:8088"));
-			corsConfig.setAllowedMethods(java.util.List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
-			corsConfig.setAllowedHeaders(java.util.List.of("*"));
-			corsConfig.setAllowCredentials(true);
-			return corsConfig;
-		})).authorizeHttpRequests(auth -> auth
-				.requestMatchers("/", "/index.html", "/api/auth/**", "/ws/**", "/topic/**", "/queue/**", "/static/**")
-				.permitAll().anyRequest().authenticated())
-				.sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS));
-		http.addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
-		return http.build();
-	}
-	
-	@Bean
+    @Bean
+    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+
+        http.csrf(csrf -> csrf.disable());
+
+        // Enable CORS using bean below
+        http.cors(cors -> cors.configurationSource(corsConfigurationSource()));
+
+        http.authorizeHttpRequests(auth -> auth
+                .requestMatchers(
+                        "/",
+                        "/index.html",
+                        "/api/auth/**",    // login + register
+                        "/ws/**",          // websocket endpoint
+                        "/topic/**",
+                        "/queue/**",
+                        "/static/**"
+                )
+                .permitAll()
+                .anyRequest()
+                .authenticated()
+        );
+
+        http.sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS));
+
+        // JWT filter before Spring Security auth
+        http.addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
+
+        return http.build();
+    }
+
+    // ===== CORS CONFIGURATION (ONLY THIS ONE WILL APPLY) =====
+    @Bean
     public CorsConfigurationSource corsConfigurationSource() {
+
         CorsConfiguration config = new CorsConfiguration();
 
-        // ✅ ALLOW ONLY your frontend origin
-        config.setAllowedOrigins(List.of("http://localhost:8088")); 
+        // Allow only your frontend
+        config.setAllowedOriginPatterns(List.of("http://localhost:8088"));
+
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(List.of("*"));
         config.setAllowCredentials(true);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", config);
+
         return source;
     }
 
-	@Bean
-	public AuthenticationManager authManager(AuthenticationConfiguration config) throws Exception {
-		return config.getAuthenticationManager();
-	}
+    @Bean
+    public AuthenticationManager authenticationManager(AuthenticationConfiguration config) throws Exception {
+        return config.getAuthenticationManager();
+    }
 
-	@Bean
-	public PasswordEncoder passwordEncoder() {
-		return new BCryptPasswordEncoder();
-	}
+    @Bean
+    public PasswordEncoder passwordEncoder() {
+        return new BCryptPasswordEncoder();
+    }
 }

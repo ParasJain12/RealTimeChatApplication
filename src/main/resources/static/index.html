@@ -54,46 +54,81 @@
 		let stompClient = null;
 		let token = null;
 
+		/* -------------------------------------
+		   STEP 1: LOGIN
+		-------------------------------------- */
 		async function login() {
 			const username = document.getElementById("username").value;
 			const password = document.getElementById("password").value;
 
 			const res = await fetch("http://localhost:8088/api/auth/login", {
 				method: "POST",
-				headers: {"Content-Type": "application/json"},
-				body: JSON.stringify({username, password})
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ username, password })
 			});
 
-			if (!res.ok) {alert("Login failed!"); return;}
+			if (!res.ok) { alert("Login failed!"); return; }
+
 			const data = await res.json();
 			token = data.token;
+
 			document.getElementById("loginDiv").style.display = "none";
 			document.getElementById("chatDiv").style.display = "block";
 			document.getElementById("userLabel").textContent = username;
+
+			// Load old messages from DB
+			await loadHistory();
+
 			alert("Login successful! Now connect to chat.");
 		}
 
+		/* -------------------------------------
+		   STEP 2: LOAD CHAT HISTORY
+		-------------------------------------- */
+		async function loadHistory() {
+			try {
+				const res = await fetch("http://localhost:8088/api/chat/history");
+				const msgs = await res.json();
+
+				msgs.forEach(m => {
+					showMessage(m.sender + ": " + m.text);
+				});
+			} catch (e) {
+				console.error("Error loading history:", e);
+			}
+		}
+
+		/* -------------------------------------
+		   STEP 3: CONNECT WEBSOCKET
+		-------------------------------------- */
 		document.getElementById('connectBtn').addEventListener('click', function () {
 			const socket = new SockJS('/ws');
 			stompClient = Stomp.over(socket);
+
 			stompClient.connect(
-				{Authorization: "Bearer " + token}, // attach token here 👈
+				{ Authorization: "Bearer " + token }, // send JWT
 				function (frame) {
 					console.log('Connected: ' + frame);
+
 					document.getElementById('connectBtn').disabled = true;
 					document.getElementById('disconnectBtn').disabled = false;
 					document.getElementById('sendBtn').disabled = false;
+
+					// Subscribe to public chat topic
 					stompClient.subscribe('/topic/greetings', function (message) {
 						const body = JSON.parse(message.body);
-						showMessage(body.from + ": " + body.text);
+						showMessage(body.sender + ": " + body.text);
 					});
 				},
 				function (error) {
-					alert("Connection error (maybe invalid token): " + error);
+					alert("Connection error: " + error);
 				}
 			);
 		});
 
+		/* -------------------------------------
+		   STEP 4: DISCONNECT
+		-------------------------------------- */
 		document.getElementById('disconnectBtn').addEventListener('click', function () {
 			if (stompClient) {
 				stompClient.disconnect();
@@ -104,16 +139,25 @@
 			}
 		});
 
+		/* -------------------------------------
+		   STEP 5: SEND MESSAGE
+		-------------------------------------- */
 		function sendMessage(event) {
 			event.preventDefault();
 			const text = document.getElementById('message').value;
+
 			stompClient.send('/app/hello', {}, JSON.stringify({
+				sender: document.getElementById("userLabel").innerText,
 				text: text,
 				time: new Date().toISOString()
 			}));
+
 			document.getElementById('message').value = '';
 		}
 
+		/* -------------------------------------
+		   STEP 6: DISPLAY MESSAGE
+		-------------------------------------- */
 		function showMessage(msg) {
 			const div = document.getElementById('messages');
 			const p = document.createElement('p');
@@ -122,6 +166,6 @@
 			div.scrollTop = div.scrollHeight;
 		}
 	</script>
-</body>
 
+</body>
 </html>
