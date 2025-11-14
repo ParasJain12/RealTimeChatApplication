@@ -31,40 +31,29 @@ public class SecurityConfig {
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
 
         http.csrf(csrf -> csrf.disable());
-
-        // Enable CORS using bean below
         http.cors(cors -> cors.configurationSource(corsConfigurationSource()));
-
         http.authorizeHttpRequests(auth -> auth
-                .requestMatchers(
-                        "/",
-                        "/index.html",
-                        "/api/auth/**",    // login + register
-                        "/ws/**",          // websocket endpoint
-                        "/topic/**",
-                        "/queue/**",
-                        "/static/**"
-                )
-                .permitAll()
+        		.requestMatchers("/", "/index.html",
+        		        "/api/auth/**",
+        		        "/api/chat/history",
+        		        "/ws/**",
+        		        "/topic/**",
+        		        "/queue/**",
+        		        "/static/**")
+        		.permitAll()
                 .anyRequest()
                 .authenticated()
         );
 
         http.sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS));
-
-        // JWT filter before Spring Security auth
         http.addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
-
         return http.build();
     }
 
-    // ===== CORS CONFIGURATION (ONLY THIS ONE WILL APPLY) =====
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
-
         CorsConfiguration config = new CorsConfiguration();
 
-        // Allow only your frontend
         config.setAllowedOriginPatterns(List.of("http://localhost:8088"));
 
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
